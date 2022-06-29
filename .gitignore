@@ -1,1 +1,3 @@
 code_local/
+repos/pytorch-CycleGAN-and-pix2pix/checkpoints
+repos/pytorch-CycleGAN-and-pix2pix/results
