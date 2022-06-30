@@ -366,8 +366,7 @@ class ResnetGenerator(nn.Module):
                       nn.ReLU(True)]
         model += [nn.ReflectionPad2d(3)]
         model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-        model += [norm_layer(output_nc),
-                 nn.ReLU(True)]
+        model += [nn.Tanh()]
 
         self.model = nn.Sequential(*model)
 
@@ -579,7 +578,7 @@ class NLayerDiscriminator(nn.Module):
             nn.ReLU(True)
         ]
 
-        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw), norm_layer(1), nn.ReLU(True)]  # output 1 channel prediction map
+        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
         self.model = nn.Sequential(*sequence)
 
     def forward(self, input):
