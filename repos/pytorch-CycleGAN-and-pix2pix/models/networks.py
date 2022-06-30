@@ -257,7 +257,7 @@ class GANLoss(nn.Module):
             target_tensor = self.fake_label
         return target_tensor.expand_as(prediction)
 
-    def __call__(self, prediction, target_is_real):
+    def __old_call__(self, prediction, target_is_real):
         """Calculate loss given Discriminator's output and grount truth labels.
 
         Parameters:
@@ -275,10 +275,31 @@ class GANLoss(nn.Module):
                 loss = -prediction.mean()
             else:
                 loss = prediction.mean()
+            loss -= cal_gradient_penalty()
+        return loss
+
+    def __call__(self, prediction_real, prediction_fake, device, netD):
+        """Calculate loss given Discriminator's output and grount truth labels.
+
+        Returns:
+            the calculated loss.
+        """
+        if self.gan_mode in ['lsgan', 'vanilla']:
+            target_tensor_fake = self.get_target_tensor(prediction_fake, False)
+            target_tensor_true = self.get_target_tensor(prediction_real, True)
+            loss = (self.loss(prediction_real, target_tensor_true) + self.loss(prediction_fake, target_tensor_fake))*0.5
+        elif self.gan_mode == 'wgangp':
+            loss = -prediction_real.mean()
+    
+            loss += prediction_fake.mean()
+            loss -= cal_gradient_penalty(netD = netD, 
+                                        real_data = prediction_real,
+                                        fake_data=prediction_fake,
+                                        device=device)
         return loss
 
 
-def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', constant=1.0, lambda_gp=10.0):
+def cal_gradient_penalty(netD, real_data, fake_data, device, constant=1.0, lambda_gp=10.0):
     """Calculate the gradient penalty loss, used in WGAN-GP paper https://arxiv.org/abs/1704.00028
 
     Arguments:
@@ -293,16 +314,10 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
     Returns the gradient penalty loss
     """
     if lambda_gp > 0.0:
-        if type == 'real':   # either use real images, fake images, or a linear interpolation of two.
-            interpolatesv = real_data
-        elif type == 'fake':
-            interpolatesv = fake_data
-        elif type == 'mixed':
-            alpha = torch.rand(real_data.shape[0], 1, device=device)
-            alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
-            interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
-        else:
-            raise NotImplementedError('{} not implemented'.format(type))
+        alpha = torch.rand(real_data.shape[0], 1, device=device)
+        alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+        interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
+        
         interpolatesv.requires_grad_(True)
         disc_interpolates = netD(interpolatesv)
         gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,

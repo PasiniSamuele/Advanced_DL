@@ -135,12 +135,15 @@ class ECycleGANModel(BaseModel):
         """
         # Real
         pred_real = netD(real)
-        loss_D_real = self.criterionGAN(pred_real, True)
         # Fake
         pred_fake = netD(fake.detach())
+        """
+        loss_D_real = self.criterionGAN(pred_real, True)
+        
         loss_D_fake = self.criterionGAN(pred_fake, False)
         # Combined loss and calculate gradients
-        loss_D = (loss_D_real + loss_D_fake) * 0.5
+        loss_D = (loss_D_real + loss_D_fake) * 0.5"""
+        loss_D  = self.criterionGAN(pred_real, pred_fake, self.device, netD)
         loss_D.backward()
         return loss_D
 
