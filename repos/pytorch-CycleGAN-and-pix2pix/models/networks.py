@@ -351,7 +351,7 @@ class RDNBGenerator(nn.Module):
         mult = 2 ** n_downsampling
         for i in range(n_blocks):       # add ResNet blocks
 
-            model += [RDNB(ngf * mult, padding_type=padding_type, norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
+            model += [RDNB(ngf * mult, padding_type=padding_type, norm_layer=norm_layer)]
 
         for i in range(n_downsampling):  # add upsampling layers
             mult = 2 ** (n_downsampling - i)
@@ -489,7 +489,7 @@ class DenseBlock(nn.Module):
 
 class RDNB(nn.Module):
     """Define a RDNB block"""
-    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias, num_dense_layers = 3, num_dense_subblocks = 4):
+    def __init__(self, dim, padding_type, norm_layer, num_dense_layers = 3, num_dense_subblocks = 4, residual_scaling = 0.5):
         """Initialize the Resnet block
 
         A resnet block is a conv block with skip connections
@@ -498,16 +498,19 @@ class RDNB(nn.Module):
         Original Resnet paper: https://arxiv.org/pdf/1512.03385.pdf
         """
         super(RDNB, self).__init__()
-        self.rdnb_block = self.build_rdnb_block(dim, padding_type, norm_layer, use_dropout, use_bias, num_dense_layers, num_dense_subblocks)
+        self.alpha = residual_scaling
+        self.rdnb_block = self.build_rdnb_block(dim, padding_type, norm_layer, num_dense_layers, num_dense_subblocks)
 
-    def build_rdnb_block(self, dim, padding_type, norm_layer, use_dropout, use_bias, num_dense_layers,num_dense_subblocks):
-        return DenseBlock(dim, padding_type, norm_layer, num_dense_subblocks)
+    def build_rdnb_block(self, dim, padding_type, norm_layer, num_dense_layers,num_dense_subblocks):
+        return [DenseBlock(dim, padding_type, norm_layer, num_dense_subblocks) for _ in range (num_dense_layers)]
 
     def forward(self, x):
-        """Forward function"""
-        out = x + self.rdnb_block(x)  
+        input = x
+        for block in self.rdnb_block:
+            output = block(input) * self.alpha
+            input = input + output
+        out = x + input
         return out
-    
 
 class ResnetBlock(nn.Module):
     """Define a Resnet block"""
