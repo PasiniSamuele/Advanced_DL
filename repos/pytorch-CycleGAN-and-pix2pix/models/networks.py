@@ -116,7 +116,7 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[], num_dense_layers = 3, num_dense_subblocks = 4, residual_scaling = 0.5):
     """Create a generator
 
     Parameters:
@@ -155,7 +155,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == "RDNB" :
-        net = RDNBGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
+        net = RDNBGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9,
+                 num_dense_layers = num_dense_layers, num_dense_subblocks = num_dense_subblocks, residual_scaling = residual_scaling)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -315,7 +316,7 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
 
 class RDNBGenerator(nn.Module):
 
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='zero', num_dense_layers = 3, num_dense_subblocks = 4):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='zero', num_dense_layers = 3, num_dense_subblocks = 4, residual_scaling = 0.5):
         """Construct a Resnet-based generator
 
         Parameters:
@@ -351,7 +352,12 @@ class RDNBGenerator(nn.Module):
         mult = 2 ** n_downsampling
         for i in range(n_blocks):       # add ResNet blocks
 
-            model += [RDNB(ngf * mult, padding_type=padding_type, norm_layer=norm_layer)]
+            model += [RDNB(ngf * mult, 
+                    padding_type=padding_type, 
+                    norm_layer=norm_layer,  
+                    num_dense_layers = num_dense_layers,
+                    num_dense_subblocks = num_dense_subblocks, 
+                    residual_scaling=residual_scaling)]
 
         for i in range(n_downsampling):  # add upsampling layers
             mult = 2 ** (n_downsampling - i)

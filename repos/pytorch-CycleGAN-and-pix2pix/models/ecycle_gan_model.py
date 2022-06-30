@@ -41,6 +41,10 @@ class ECycleGANModel(BaseModel):
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--num_dense_layers', type=int, default=3, help='number of dense blocks in every RDNB block')
+            parser.add_argument('--num_dense_subblocks', type=int, default=4, help='number of con-batch-relu in every dense block')
+            parser.add_argument('--residual_scaling', type=float, default=0.5, help='residual scaling for dense residuals (0-1)')
+
 
         return parser
 
@@ -71,9 +75,11 @@ class ECycleGANModel(BaseModel):
         # The naming is different from those used in the paper.
         # Code (vs. paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
         self.netG_A = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, "RDNB", opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, 
+                                        opt.num_dense_layers, opt.num_dense_subblocks, opt.residual_scaling)
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, "RDNB", opt.norm,
-                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+                                        not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, 
+                                        opt.num_dense_layers, opt.num_dense_subblocks, opt.residual_scaling)
 
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
