@@ -462,9 +462,9 @@ class DenseBlock(nn.Module):
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
 
-        sub_blocks = [self.build_subdense_block(dim, p, norm_layer) for i in range (num_subblocks)]
+        sub_blocks = [self.build_subdense_block(dim, p, norm_layer) for _ in range (num_subblocks)]
 
-        conv_final_block = [nn.Conv2d(dim, dim, kernel_size=3, padding=p), norm_layer(dim)]
+        conv_final_block = nn.Sequential(*[nn.Conv2d(dim, dim, kernel_size=3, padding=p), norm_layer(dim)])
 
         return sub_blocks, conv_final_block
 
@@ -480,10 +480,11 @@ class DenseBlock(nn.Module):
         block_outputs = [x]
 
         for block in self.sub_blocks:
-            inputs = torch.sum(block_outputs)
-            blocks_outputs += block(inputs)
-
-        out = self.conv_final_block(block_outputs) 
+            inputs = torch.stack(block_outputs, dim=0).sum(dim=0)
+            block_outputs += [block(inputs)]
+            
+        inp = torch.stack(block_outputs, dim=0).sum(dim=0)
+        out = self.conv_final_block(inp)
         return out
 
 class RDNB(nn.Module):
@@ -564,7 +565,8 @@ class ResnetBlock(nn.Module):
 
     def forward(self, x):
         """Forward function (with skip connections)"""
-        out = x + self.conv_block(x)  # add skip connections
+        y = self.conv_block(x)
+        out = x + y  # add skip connections
         return out
 
 
