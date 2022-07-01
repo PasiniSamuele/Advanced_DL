@@ -127,14 +127,9 @@ class CycleGANModel(BaseModel):
         Return the discriminator loss.
         We also call loss_D.backward() to calculate the gradients.
         """
-        # Real
-        pred_real = netD(real)
-        loss_D_real = self.criterionGAN(pred_real, True)
-        # Fake
-        pred_fake = netD(fake.detach())
-        loss_D_fake = self.criterionGAN(pred_fake, False)
+    
         # Combined loss and calculate gradients
-        loss_D = (loss_D_real + loss_D_fake) * 0.5
+        loss_D  = self.criterionGAN(real, fake.detach(), self.device, netD)*0.5
         loss_D.backward()
         return loss_D
 
@@ -166,9 +161,9 @@ class CycleGANModel(BaseModel):
             self.loss_idt_B = 0
 
         # GAN loss D_A(G_A(A))
-        self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
+        self.loss_G_A = self.criterionGAN(self.fake_B, None, self.device, self.netD_A)
         # GAN loss D_B(G_B(B))
-        self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True) # We are training G, so we want to fool the discriminator.
+        self.loss_G_B = self.criterionGAN(self.fake_A, None, self.device, self.netD_B) # We are training G, so we want to fool the discriminator.
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||

@@ -94,7 +94,7 @@ class ECycleGANModel(BaseModel):
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
-            self.criterionCycle = torch.nn.L1Loss()
+            self.criterionCycle = networks.PerceptualLoss(i=1, j=1, channels=opt.input_nc).to(self.device)
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -133,17 +133,18 @@ class ECycleGANModel(BaseModel):
         Return the discriminator loss.
         We also call loss_D.backward() to calculate the gradients.
         """
-        # Real
+        """"# Real
         pred_real = netD(real)
         # Fake
-        pred_fake = netD(fake.detach())
+        pred_fake = netD(fake.detach())"""
         """
         loss_D_real = self.criterionGAN(pred_real, True)
         
         loss_D_fake = self.criterionGAN(pred_fake, False)
         # Combined loss and calculate gradients
         loss_D = (loss_D_real + loss_D_fake) * 0.5"""
-        loss_D  = self.criterionGAN(pred_real, pred_fake, self.device, netD)
+
+        loss_D  = self.criterionGAN(real, fake.detach(), self.device, netD)*0.5
         loss_D.backward()
         return loss_D
 
@@ -175,9 +176,9 @@ class ECycleGANModel(BaseModel):
             self.loss_idt_B = 0
 
         # GAN loss D_A(G_A(A))
-        self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
+        self.loss_G_A = self.criterionGAN(self.fake_B, None, self.device, self.netD_A)
         # GAN loss D_B(G_B(B))
-        self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True) # We are training G, so we want to fool the discriminator.
+        self.loss_G_B = self.criterionGAN(self.fake_A, None, self.device, self.netD_B) # We are training G, so we want to fool the discriminator.
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||

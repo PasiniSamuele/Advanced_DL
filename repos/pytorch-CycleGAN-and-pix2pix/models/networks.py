@@ -275,27 +275,34 @@ class GANLoss(nn.Module):
                 loss = -prediction.mean()
             else:
                 loss = prediction.mean()
-            loss -= cal_gradient_penalty()
         return loss
 
-    def __call__(self, prediction_real, prediction_fake, device, netD):
+    def __call__(self, real, fake, device, netD):
         """Calculate loss given Discriminator's output and grount truth labels.
 
         Returns:
             the calculated loss.
         """
         if self.gan_mode in ['lsgan', 'vanilla']:
-            target_tensor_fake = self.get_target_tensor(prediction_fake, False)
-            target_tensor_true = self.get_target_tensor(prediction_real, True)
-            loss = (self.loss(prediction_real, target_tensor_true) + self.loss(prediction_fake, target_tensor_fake))*0.5
+            loss = 0
+            if real is not None:
+                prediction_real = netD(real)
+                target_tensor_true = self.get_target_tensor(prediction_real, True)
+                loss += self.loss(prediction_real, target_tensor_true)
+            if fake is not None: 
+                prediction_fake = netD(fake)
+                target_tensor_fake = self.get_target_tensor(prediction_fake, False)
+                loss += self.loss(prediction_fake, target_tensor_fake)
+            
         elif self.gan_mode == 'wgangp':
-            loss = -prediction_real.mean()
+            loss = -netD(real).mean() if real is not None else 0
     
-            loss += prediction_fake.mean()
-            loss -= cal_gradient_penalty(netD = netD, 
-                                        real_data = prediction_real,
-                                        fake_data=prediction_fake,
-                                        device=device)
+            loss += netD(fake).mean() if fake is not None else 0
+            if fake is not None and real is not None:
+                loss += cal_gradient_penalty(netD = netD, 
+                                        real_data = real,
+                                        fake_data=fake,
+                                        device=device)[0]
         return loss
 
 
@@ -328,6 +335,72 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, constant=1.0, lambd
         return gradient_penalty, gradients
     else:
         return 0.0, None
+
+class PerceptualLoss(nn.Module):
+    def __init__(self, alpha=0.5, beta=0.5, i=-1, j=-1, channels=3):
+        """ Initialize the PerceptualLoss class.
+
+        Parameters:
+            alpha (float) - - weight of the feature-wise loss
+            beta (float) - - weight of the pixel-wise loss
+            i (int) - - i-th max-pool layer of VGG19 straight after the extracted feature
+            j (int) - - j-th conv layer of VGG19 to extracte feature before i
+            channels (int) - - channels of the input images from which the feature extractor gets the features
+        """
+        super(PerceptualLoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.feature_extractor = self.get_feature_extractor(i, j, channels)
+        self.cycle_loss = torch.nn.L1Loss()
+
+    def get_feature_extractor(self, i, j, channels):
+        model = torch.hub.load('pytorch/vision:v0.10.0', 'vgg19', pretrained=True)
+        convs = []
+        convs.append([])
+        for name,module in model.features.named_modules():
+            if (isinstance(module, nn.Conv2d)):
+                convs[-1] += [module]
+
+            if (isinstance(module, nn.MaxPool2d)):
+                convs.append([])     
+        convs = convs[:-1]
+        chosed = convs[i][j]
+        idx = 0
+        for name,module in model.features.named_modules():
+            if module == chosed:
+                print(name,module)
+                idx = int(name)
+        if channels == 3:
+            model.features = nn.Sequential(*[model.features[i] for i in range(idx+1)])
+        else:
+            initial_conv= nn.Conv2d(channels, 3, kernel_size=1, padding=0, bias=False)
+            model.features = nn.Sequential(initial_conv, *[model.features[i] for i in range(idx+1)])
+        model.classifier = nn.Identity()
+        model.avgpool = nn.Identity()
+        for param in model.parameters():
+            param.requires_grad = False
+        return model
+
+    def get_pixelwise_loss(self, real_image, rec_image):
+        return self.cycle_loss(real_image, rec_image)
+    
+    def get_featurewise_loss(self, real_image, rec_image):
+        feature_real = self.feature_extractor(real_image)
+        feature_fake = self.feature_extractor(rec_image)
+        return self.cycle_loss(feature_real, feature_fake)
+
+
+
+    def __call__(self, real, fake):
+        """Calculate loss.
+
+        Returns:
+            the calculated loss.
+        """
+        loss = self.beta * self.get_pixelwise_loss(real,fake)
+        loss += self.alpha * self.get_featurewise_loss(real,fake)
+        return loss
+
 
 class RDNBGenerator(nn.Module):
 
@@ -483,7 +556,7 @@ class DenseBlock(nn.Module):
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
 
-        sub_blocks = [self.build_subdense_block(dim, p, norm_layer) for _ in range (num_subblocks)]
+        sub_blocks = nn.ModuleList([self.build_subdense_block(dim, p, norm_layer) for _ in range (num_subblocks)])
 
         conv_final_block = nn.Sequential(*[nn.Conv2d(dim, dim, kernel_size=3, padding=p), norm_layer(dim)])
 
@@ -523,7 +596,7 @@ class RDNB(nn.Module):
         self.rdnb_block = self.build_rdnb_block(dim, padding_type, norm_layer, num_dense_layers, num_dense_subblocks)
 
     def build_rdnb_block(self, dim, padding_type, norm_layer, num_dense_layers,num_dense_subblocks):
-        return [DenseBlock(dim, padding_type, norm_layer, num_dense_subblocks) for _ in range (num_dense_layers)]
+        return nn.ModuleList([DenseBlock(dim, padding_type, norm_layer, num_dense_subblocks) for _ in range (num_dense_layers)])
 
     def forward(self, x):
         input = x
