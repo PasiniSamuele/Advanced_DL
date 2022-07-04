@@ -41,11 +41,13 @@ class ECycleGANModel(BaseModel):
         parser.add_argument('--num_dense_subblocks', type=int, default=4, help='number of con-batch-relu in every dense block')
         parser.add_argument('--residual_scaling', type=float, default=0.5, help='residual scaling for dense residuals (0-1)')
         
+        
         if is_train:
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
-           
+            parser.add_argument('--perc_i', type=int, default=-1, help='')
+            parser.add_argument('--perc_j', type=int, default=-1, help='')
 
 
         return parser
@@ -96,7 +98,7 @@ class ECycleGANModel(BaseModel):
             self.fake_B_pool = ImagePool(opt.pool_size)  # create image buffer to store previously generated images
             # define loss functions
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)  # define GAN loss.
-            self.criterionCycle = networks.PerceptualLoss(i=1, j=1, channels=opt.input_nc).to(self.device)
+            self.criterionCycle = networks.PerceptualLoss(i=opt.perc_i, j=opt.perc_j, channels=opt.input_nc).to(self.device)
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
