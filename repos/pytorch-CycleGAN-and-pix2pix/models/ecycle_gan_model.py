@@ -3,7 +3,7 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
-
+from util.torch_receptive_field import receptive_field
 
 class ECycleGANModel(BaseModel):
     """
@@ -85,11 +85,14 @@ class ECycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, 
                                         opt.num_dense_layers, opt.num_dense_subblocks, opt.residual_scaling)
 
+
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
             self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+            print(self.netD_A)
+            receptive_field(self.netD_A.module.model, input_size=(opt.input_nc, 48, 48))
 
         if self.isTrain:
             if opt.lambda_identity > 0.0:  # only works when input and output images have the same number of channels
@@ -154,13 +157,13 @@ class ECycleGANModel(BaseModel):
 
     def backward_D_A(self):
         """Calculate GAN loss for discriminator D_A"""
-        fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
+        fake_A = self.fake_A_pool.query(self.fake_A)
+        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_A, fake_A)
 
     def backward_D_B(self):
         """Calculate GAN loss for discriminator D_B"""
-        fake_A = self.fake_A_pool.query(self.fake_A)
-        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
+        fake_B = self.fake_B_pool.query(self.fake_B)
+        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_B, fake_B)
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
@@ -180,9 +183,9 @@ class ECycleGANModel(BaseModel):
             self.loss_idt_B = 0
 
         # GAN loss D_A(G_A(A))
-        self.loss_G_A = self.criterionGAN(self.fake_B, None, self.device, self.netD_A)
+        self.loss_G_A = self.criterionGAN(self.fake_B, None, self.device, self.netD_B)
         # GAN loss D_B(G_B(B))
-        self.loss_G_B = self.criterionGAN(self.fake_A, None, self.device, self.netD_B) # We are training G, so we want to fool the discriminator.
+        self.loss_G_B = self.criterionGAN(self.fake_A, None, self.device, self.netD_A) # We are training G, so we want to fool the discriminator.
         # Forward cycle loss || G_B(G_A(A)) - A||
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||

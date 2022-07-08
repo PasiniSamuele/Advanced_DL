@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+import torch.nn.functional as F
+
 
 
 ###############################################################################
@@ -322,7 +324,9 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, constant=1.0, lambd
     """
     if lambda_gp > 0.0:
         alpha = torch.rand(real_data.shape[0], 1, device=device)
+        
         alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
+
         interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
         
         interpolatesv.requires_grad_(True)
@@ -805,7 +809,7 @@ class NLayerDiscriminator(nn.Module):
         nf_mult_prev = nf_mult
         nf_mult = min(2 ** n_layers, 8)
         sequence += [
-            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
             norm_layer(ndf * nf_mult),
             nn.ReLU(True)
         ]
@@ -815,8 +819,7 @@ class NLayerDiscriminator(nn.Module):
 
     def forward(self, input):
         """Standard forward."""
-        return self.model(input)
-
+        return F.relu(self.model(input))
 
 class PixelDiscriminator(nn.Module):
     """Defines a 1x1 PatchGAN discriminator (pixelGAN)"""
