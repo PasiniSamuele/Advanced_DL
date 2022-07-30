@@ -25,7 +25,7 @@ try:
 except OSError:
     to_remove = []
 try:
-    base_ind = np.load(lastind)
+    base_ind = 240#np.load(lastind)
 except OSError:
     base_ind = 0
 
@@ -34,7 +34,7 @@ size = (300, 300)
 layout = [
     [sg.Text(text="Current image", key="-TEXT-")],
     [sg.Image(size=size, key='-IMAGE-')],
-    [sg.Button("Bench (b)"), sg.Button('Remove (r)'), sg.Button('Skip (s)')],
+    [sg.Button("Bench (b)", key="-BENCH-"), sg.Button('Remove (r)', key="-REM-"), sg.Button('Skip (s)', key="-SKIP-")],
 ]
 
 # Create the form and show it without the plot
@@ -65,11 +65,11 @@ while base_ind < num_imgs:
     if event == sg.WIN_CLOSED:
         break
 
-    if event in ("Bench", "b", "B"):
+    if event in ("-BENCH-", "b", "B"):
         if index not in benchmarks:
             benchmarks.append(index)
         print("benchmarked",index)
-    elif event in ('Remove', "r", "R"):
+    elif event in ('-REM-', "r", "R"):
         if index not in to_remove:
             to_remove.append(index)
         print("removed",index)
