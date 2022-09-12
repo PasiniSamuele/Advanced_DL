@@ -4,7 +4,6 @@ repos/pytorch-CycleGAN-and-pix2pix/results
 repos/pytorch-CycleGAN-and-pix2pix/models
 code/cycle_gan/checkpoints
 code/cycle_gan/results
-code/cycle_gan/models
 code/models
 **/.ipynb_checkpoints/*
 **/__pycache__/*
