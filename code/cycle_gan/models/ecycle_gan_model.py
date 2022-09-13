@@ -48,7 +48,7 @@ class ECycleGANModel(BaseModel):
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--perc_i', type=int, default=-1, help='')
             parser.add_argument('--perc_j', type=int, default=-1, help='')
-
+            parser.add_argument('--discriminator_threshold', type=float, default=0.3, help='used to determine when to update the discriminator weights')
 
         return parser
 
@@ -85,7 +85,7 @@ class ECycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, 
                                         opt.num_dense_layers, opt.num_dense_subblocks, opt.residual_scaling)
 
-
+        self.D_threshold = opt.discriminator_threshold
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
@@ -155,15 +155,27 @@ class ECycleGANModel(BaseModel):
         loss_D.backward()
         return loss_D
 
+    def get_th_discriminator_A(self):
+        fake_B = self.fake_B_pool.query(self.fake_B)
+        #print(self.netD_A(self.real_A))
+        #print(torch.log(self.netD_A(self.real_A)))
+        th = (torch.log(self.netD_A(self.real_B).mean()) + torch.log(self.netD_A(fake_B).mean()))/2
+        return th
+
+    def get_th_discriminator_B(self):
+        fake_A = self.fake_A_pool.query(self.fake_A)
+        th = (torch.log(self.netD_B(self.real_A).mean()) + torch.log(self.netD_B(fake_A).mean()))/2
+        return th
+
     def backward_D_A(self):
         """Calculate GAN loss for discriminator D_A"""
-        fake_A = self.fake_A_pool.query(self.fake_A)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_A, fake_A)
+        fake_B = self.fake_B_pool.query(self.fake_B)
+        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
 
     def backward_D_B(self):
         """Calculate GAN loss for discriminator D_B"""
-        fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_B, fake_B)
+        fake_A = self.fake_A_pool.query(self.fake_A)
+        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
@@ -194,7 +206,7 @@ class ECycleGANModel(BaseModel):
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
         self.loss_G.backward()
 
-    def optimize_parameters(self):
+    def optimize_parameters(self, iteration, tot_iterations):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward()      # compute fake images and reconstruction images.
@@ -204,21 +216,31 @@ class ECycleGANModel(BaseModel):
         self.backward_G()             # calculate gradients for G_A and G_B
         self.optimizer_G.step()       # update G_A and G_B's weights
         # D_A and D_B
-        self.set_requires_grad([self.netD_A, self.netD_B], True)
-        # self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
+        
         # self.backward_D_A()      # calculate gradients for D_A
         # self.backward_D_B()      # calculate graidents for D_B
         # self.optimizer_D.step()  # update D_A and D_B's weights
-
+        self.set_requires_grad([self.netD_A, self.netD_B], True)
+        self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
         self.backward_D_A()      # calculate gradients for D_A
         self.backward_D_B()      # calculate graidents for D_B
 
-        if self.loss_D_A >= 0.3:
-            self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
-            self.backward_D_A()
-            self.optimizer_D.step()  # update D_A and D_B's weights
+        #th_A = self.get_th_discriminator_A()
+        #th_B = self.get_th_discriminator_B()
+        #print(th_A)
 
-        if self.loss_D_B >= 0.3:
-            self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
-            self.backward_D_B()
+        if iteration > tot_iterations/2:
+
+            if self.loss_D_A >= self.D_threshold:
+                #self.set_requires_grad([self.netD_A], True)
+                self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
+                self.backward_D_A()
+                self.optimizer_D.step()  # update D_A and D_B's weights
+
+            if self.loss_D_B >= self.D_threshold:
+                #self.set_requires_grad([self.netD_B], True)
+                self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
+                self.backward_D_B()
+                self.optimizer_D.step()  # update D_A and D_B's weights
+        else:
             self.optimizer_D.step()  # update D_A and D_B's weights

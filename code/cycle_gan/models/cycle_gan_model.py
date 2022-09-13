@@ -135,13 +135,14 @@ class CycleGANModel(BaseModel):
 
     def backward_D_A(self):
         """Calculate GAN loss for discriminator D_A"""
-        fake_A = self.fake_A_pool.query(self.fake_A)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_A, fake_A)
+        fake_B = self.fake_B_pool.query(self.fake_B)
+        
+        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
 
     def backward_D_B(self):
         """Calculate GAN loss for discriminator D_B"""
-        fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_B, fake_B)
+        fake_A = self.fake_A_pool.query(self.fake_A)
+        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
@@ -172,7 +173,7 @@ class CycleGANModel(BaseModel):
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
         self.loss_G.backward()
 
-    def optimize_parameters(self):
+    def optimize_parameters(self, iteration, tot_iterations):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward()      # compute fake images and reconstruction images.
