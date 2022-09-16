@@ -70,10 +70,7 @@ class ECycleGANModel(BaseModel):
 
         self.visual_names = visual_names_A + visual_names_B  # combine visualizations for A and B
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>.
-        if self.isTrain:
-            self.model_names = ['G_A', 'G_B', 'D_A', 'D_B']
-        else:  # during test time, only load Gs
-            self.model_names = ['G_A', 'G_B']
+        self.model_names = ['G_A', 'G_B', 'D_A', 'D_B']
 
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
@@ -85,12 +82,14 @@ class ECycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids, 
                                         opt.num_dense_layers, opt.num_dense_subblocks, opt.residual_scaling)
 
+        self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
+                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+        self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
+                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+
         if self.isTrain:  # define discriminators
             self.D_threshold = opt.discriminator_threshold
-            self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
-            self.netD_B = networks.define_D(opt.input_nc, opt.ndf, opt.netD,
-                                            opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
+            
             print(self.netD_A)
             receptive_field(self.netD_A.module.model, input_size=(opt.input_nc, 48, 48))
 
@@ -128,6 +127,12 @@ class ECycleGANModel(BaseModel):
         self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
         self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
+    
+    def discriminate_inference(self):
+        with torch.no_grad():
+            return {'fake_A':self.netD_B(self.fake_A).mean().cpu().numpy().item(),
+                        'fake_B':self.netD_A(self.fake_B).mean().cpu().numpy().item(),
+                        'real_B':self.netD_A(self.real_B).mean().cpu().numpy().item()}        
 
     def backward_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
@@ -211,7 +216,7 @@ class ECycleGANModel(BaseModel):
         # forward
         self.forward()      # compute fake images and reconstruction images.
         # G_A and G_B
-        if epoch < 3 or iteration % 10 != 0:
+        if epoch < 3 or iteration % 5 != 0:
             self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
             self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
             self.backward_G()             # calculate gradients for G_A and G_B
@@ -220,7 +225,7 @@ class ECycleGANModel(BaseModel):
             self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
             self.backward_D_B()      # calculate graidents for D_B
             self.optimizer_D.step()
-        if epoch < 3 or iteration % 10 == 0:
+        if epoch < 3 or iteration % 5 == 0:
             self.set_requires_grad([self.netD_A, self.netD_B], True)
             self.optimizer_D.zero_grad()   # set D_A and D_B's gradients to zero
             self.backward_D_A()      # calculate gradients for D_A

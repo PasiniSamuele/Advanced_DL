@@ -32,6 +32,7 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
+import json
 from torchsummary import summary
 
 try:
@@ -61,6 +62,8 @@ if __name__ == '__main__':
     # test with eval mode. This only affects layers like batchnorm and dropout.
     # For [pix2pix]: we use batchnorm and dropout in the original pix2pix. You can experiment it with and without eval() mode.
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
+    discrims = []
+    
     if opt.eval:
         model.eval()
     for i, data in enumerate(dataset):
@@ -68,9 +71,12 @@ if __name__ == '__main__':
             break
         model.set_input(data)  # unpack data from data loader
         model.test()           # run inference
+        discr_preds = model.discriminate_inference()
         visuals = model.get_current_visuals()  # get image results
         img_path = model.get_image_paths()     # get image paths
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
-        save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
+        save_images(webpage, visuals, discr_preds, img_path, discrims, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize)
+    with open(opt.discrim_path, 'w') as f:
+        json.dump(discrims, f,ensure_ascii=False,indent=4)
     webpage.save()  # save the HTML
