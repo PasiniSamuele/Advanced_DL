@@ -249,7 +249,7 @@ class GANLoss(nn.Module):
             target_tensor = self.fake_label
         return target_tensor.expand_as(prediction)
 
-    def __call__(self, real, fake, device, netD):
+    def __call__(self, real, fake, device, netD, one_side_smoothing=False):
         """Calculate loss given Discriminator's output and grount truth labels.
 
         Returns:
@@ -259,7 +259,7 @@ class GANLoss(nn.Module):
             loss = 0
             if real is not None:
                 prediction_real = netD(real)
-                target_tensor_true = self.get_target_tensor(prediction_real, True)
+                target_tensor_true = self.get_target_tensor(prediction_real, not one_side_smoothing)
                 loss += self.loss(prediction_real, target_tensor_true)
             if fake is not None: 
                 prediction_fake = netD(fake)

@@ -49,6 +49,8 @@ class ECycleGANModel(BaseModel):
             parser.add_argument('--perc_i', type=int, default=-1, help='')
             parser.add_argument('--perc_j', type=int, default=-1, help='')
             parser.add_argument('--discriminator_threshold', type=float, default=0.3, help='used to determine when to update the discriminator weights')
+            parser.add_argument('--instance_noise_std', type=float, default=0, help='')
+            parser.add_argument('--label_smoothing_prob', type=float, default=0, help='')
 
         return parser
 
@@ -88,6 +90,9 @@ class ECycleGANModel(BaseModel):
                                             opt.n_layers_D, opt.norm, opt.init_type, opt.init_gain, self.gpu_ids)
 
         if self.isTrain:  # define discriminators
+
+            self.instance_noise_std = opt.instance_noise_std
+            self.label_smoothing_prob = opt.label_smoothing_prob
             self.D_threshold = opt.discriminator_threshold
             
             print(self.netD_A)
@@ -134,7 +139,7 @@ class ECycleGANModel(BaseModel):
                         'fake_B':self.netD_A(self.fake_B).mean().cpu().numpy().item(),
                         'real_B':self.netD_A(self.real_B).mean().cpu().numpy().item()}        
 
-    def backward_D_basic(self, netD, real, fake):
+    def backward_D_basic(self, netD, real, fake, regularized=False):
         """Calculate GAN loss for the discriminator
 
         Parameters:
@@ -156,7 +161,26 @@ class ECycleGANModel(BaseModel):
         # Combined loss and calculate gradients
         loss_D = (loss_D_real + loss_D_fake) * 0.5"""
 
-        loss_D  = self.criterionGAN(real, fake.detach(), self.device, netD)*0.5
+        if not regularized:
+            loss_D  = self.criterionGAN(real, fake.detach(), self.device, netD)*0.5
+            loss_D.backward()
+            return loss_D
+
+        decay_start = self.opt.n_epochs//2
+
+        if self.epoch > decay_start:
+            decay = max((self.opt.n_epochs_decay - (self.epoch - decay_start)) / (self.opt.n_epochs_decay), 0)
+            noise_std = self.instance_noise_std * decay 
+            label_smoothing_prob = self.label_smoothing_prob * decay
+        else:
+            noise_std = self.instance_noise_std
+            label_smoothing_prob = self.label_smoothing_prob
+
+        one_side_smoothing = label_smoothing_prob > torch.rand(size=(1,))
+
+        real_noised = real + (noise_std)*torch.randn(size=real.size()).cuda()
+
+        loss_D  = self.criterionGAN(real_noised, fake.detach(), self.device, netD, one_side_smoothing=one_side_smoothing)*0.5
         loss_D.backward()
         return loss_D
 
@@ -175,7 +199,7 @@ class ECycleGANModel(BaseModel):
     def backward_D_A(self):
         """Calculate GAN loss for discriminator D_A"""
         fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
+        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B, regularized=True)
 
     def backward_D_B(self):
         """Calculate GAN loss for discriminator D_B"""
@@ -212,6 +236,7 @@ class ECycleGANModel(BaseModel):
         self.loss_G.backward()
 
     def optimize_parameters(self, iteration, tot_iterations, epoch):
+        self.epoch = epoch
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward()      # compute fake images and reconstruction images.
