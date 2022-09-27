@@ -115,8 +115,10 @@ class CycleGANModel(BaseModel):
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
 
     def discriminate_inference(self):
-        return {'fake_A':self.netD_B(self.fake_A).mean().numpy(),
-                    'fake_B':self.netD_A(self.fake_B).mean().numpy()}
+        with torch.no_grad():
+            return {'fake_A':self.netD_B(self.fake_A).mean().cpu().numpy().item(),
+                        'fake_B':self.netD_A(self.fake_B).mean().cpu().numpy().item(),
+                        'real_B':self.netD_A(self.real_B).mean().cpu().numpy().item()}        
 
     def backward_D_basic(self, netD, real, fake):
         """Calculate GAN loss for the discriminator
