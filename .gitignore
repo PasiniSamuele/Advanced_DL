@@ -5,6 +5,8 @@ repos/pytorch-CycleGAN-and-pix2pix/models
 code/cycle_gan/checkpoints
 code/cycle_gan/results
 code/models
+code/final_models
+code/indexes
 **/.ipynb_checkpoints/*
 **/__pycache__/*
-datasets/
+datasets_old/
