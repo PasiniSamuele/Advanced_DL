@@ -1,2 +1,5 @@
-# Advanced_DL
-Advanced Deep Learning project
+# A Generative Approach for Facial Expression Data Augmentation
+Image-to-Image translation aims to transfer images from a source domain to a target one while preserving the content representations. It can be applied to a wide range of applications, such as style transfer, season transfer, and photo enhancement. To accomplish this task several architectures have been proposed, including CycleGANs which are composed of a pair of GANs, and their improved version Enhanced CycleGAN (ECycleGAN).
+
+In the context of Deep Learning, one major problem is the need for huge datasets to effectively train a deep model. However, the amount of available images can be limited and dependent on the specific class, leading to unbalanced datasets. To solve this problem, a large amount of different data augmentation techniques have been developed during the last years. Our work will focus on exploiting the advancements in Image-to-Image translation to perform data augmentation of facial expression data, exploiting Enhanced CycleGANs.
+The effectiveness of the proposed method will be assessed analysing the classification performance on the unbalanced FER2013 facial expression dataset. Further attention will be devoted to preprocessing input data and qualitatively evaluating the generated results.
